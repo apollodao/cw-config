@@ -1,6 +1,6 @@
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    Addr, BankMsg, Coin, Coins, CosmosMsg, Decimal, Deps, Env, StdError, StdResult,
+    Addr, Coin, Coins, CosmosMsg, Decimal, Deps, Env, StdError, StdResult,
 };
 use cw_address_like::AddressLike;
 use cw_asset::{Asset, AssetList};
