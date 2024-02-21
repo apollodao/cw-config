@@ -2,6 +2,9 @@
 name = "cw-fee-config"
 version = "0.1.0-rc.1"
 edition = "2021"
+description = "Fee configuration for CosmWasm contracts"
+license = { workspace = true }
+repository = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
