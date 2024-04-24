@@ -9,7 +9,7 @@ repository = "https://github.com/apollodao/cw-config"
 
 [workspace.dependencies]
 cosmwasm-schema = "1.5.3"
-cosmwasm-std    = "1.5.3"
+cosmwasm-std    = "1.5.4"
 cw-address-like = "1.0.4"
 cw-asset        = "3.1.1"
 serde           = "1.0.197"
