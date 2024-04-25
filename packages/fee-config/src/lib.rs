@@ -65,6 +65,7 @@ impl FeeConfig<Addr> {
                 let assets: AssetList = assets
                     .into_iter()
                     .map(|asset| Asset::new(asset.info.clone(), asset.amount * *percentage))
+                    .filter(|asset| !asset.amount.is_zero())
                     .collect::<Vec<_>>()
                     .into();
                 assets.transfer_msgs(addr).map_err(|e| {
