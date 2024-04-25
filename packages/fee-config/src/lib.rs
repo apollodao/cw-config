@@ -65,6 +65,7 @@ impl FeeConfig<Addr> {
                 let assets: AssetList = assets
                     .into_iter()
                     .map(|asset| Asset::new(asset.info.clone(), asset.amount * *percentage))
+                    .filter(|asset| !asset.amount.is_zero())
                     .collect::<Vec<_>>()
                     .into();
                 assets.transfer_msgs(addr).map_err(|e| {
@@ -95,10 +96,11 @@ impl FeeConfig<Addr> {
         assets: &AssetList,
         env: &Env,
     ) -> StdResult<(Vec<CosmosMsg>, AssetList)> {
-        // Take fee from input assets
+        // Take fee from input assets and filter out zero amounts
         let fees: AssetList = assets
             .into_iter()
             .map(|asset| Asset::new(asset.info.clone(), asset.amount * self.fee_rate))
+            .filter(|asset| !asset.amount.is_zero())
             .collect::<Vec<_>>()
             .into();
 
@@ -190,7 +192,7 @@ impl From<FeeConfig<Addr>> for FeeConfig<String> {
 pub mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
     use cosmwasm_std::{coin, Addr, BankMsg, Coins, CosmosMsg, Decimal, Uint128};
-    use cw_asset::{Asset, AssetInfo};
+    use cw_asset::{Asset, AssetInfo, AssetList};
 
     #[test]
     fn fee_config_rate_cannot_be_larger_than_one() {
@@ -457,5 +459,30 @@ pub mod tests {
         assert_eq!(msgs.len(), 0);
         assert_eq!(assets_after_fee.to_vec()[0].amount, Uint128::new(100));
         assert_eq!(assets_after_fee.to_vec()[1].amount, Uint128::new(200));
+    }
+
+    #[test]
+    fn fee_msgs_from_assets_works_when_asset_list_contains_zero_amounts() {
+        let env = mock_env();
+
+        let fee_config = super::FeeConfig {
+            fee_rate: Decimal::percent(1),
+            fee_recipients: vec![(Addr::unchecked("addr1"), Decimal::percent(100))],
+        };
+        let assets: AssetList = vec![
+            Asset::native("uusdc", 100u128),
+            Asset::native("uatom", 0u128),
+        ]
+        .into();
+        let (msgs, coins_after_fee) = fee_config.fee_msgs_from_assets(&assets, &env).unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(
+            msgs[0],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr1".to_string(),
+                amount: vec![coin(1u128, "uusdc".to_string())]
+            })
+        );
+        assert_eq!(coins_after_fee, vec![Asset::native("uusdc", 99u128)].into());
     }
 }
