@@ -1,6 +1,6 @@
 [package]
 name = "cw-fee-config"
-version = "0.1.1"
+version = "0.1.2-rc.1"
 edition = "2021"
 description = "Fee configuration for CosmWasm contracts"
 license = { workspace = true }
