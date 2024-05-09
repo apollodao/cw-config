@@ -173,6 +173,25 @@ impl FeeConfig<Addr> {
 
         Ok((fee_msgs, coins_after_fees))
     }
+
+    /// Calculates the fee from the input coin and returns messages to send it
+    /// to the fee recipients.
+    ///
+    /// # Arguments
+    /// * `coin` - The coin to take the fee from.
+    ///
+    /// # Returns
+    /// * `Vec<CosmosMsg>` - The messages to send the fees to the fee
+    ///   recipients.
+    /// * `Coin` - The asset after the fee has been taken.
+    pub fn fee_msgs_from_coin(&self, coin: Coin, env: &Env) -> StdResult<(Vec<CosmosMsg>, Coin)> {
+        let (msgs, coins_after_fee) =
+            self.fee_msgs_from_coins(&Coins::try_from(vec![coin.clone()])?, env)?;
+        Ok((
+            msgs,
+            cosmwasm_std::coin(coins_after_fee.amount_of(&coin.denom).u128(), coin.denom),
+        ))
+    }
 }
 
 impl From<FeeConfig<Addr>> for FeeConfig<String> {
@@ -264,6 +283,27 @@ pub mod tests {
             })
         );
         assert_eq!(asset_after_fee.amount, Uint128::new(99));
+    }
+
+    #[test]
+    fn fee_msgs_from_coin_works() {
+        let env = mock_env();
+
+        let fee_config = super::FeeConfig {
+            fee_rate: Decimal::percent(1),
+            fee_recipients: vec![(Addr::unchecked("addr1"), Decimal::percent(100))],
+        };
+        let coin = coin(100u128, "uusdc");
+        let (msgs, coin_after_fee) = fee_config.fee_msgs_from_coin(coin.clone(), &env).unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(
+            msgs[0],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr1".to_string(),
+                amount: vec![cosmwasm_std::coin(1u128, "uusdc".to_string())]
+            })
+        );
+        assert_eq!(coin_after_fee, cosmwasm_std::coin(99u128, "uusdc"));
     }
 
     #[test]
