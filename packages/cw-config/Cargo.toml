@@ -1,0 +1,20 @@
+[package]
+name = "cw-config"
+version = "0.1.0-rc.1"
+edition = "2021"
+description = "Fee configuration for CosmWasm contracts"
+license = { workspace = true }
+repository = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cosmwasm-schema = { workspace = true }
+cosmwasm-std    = { workspace = true }
+cw-address-like = { workspace = true }
+cw-asset        = { workspace = true }
+serde           = { workspace = true }
+cw-storage-plus = { workspace = true }
+optional_struct = { workspace = true }
+cw-ownable      = { workspace = true }
+thiserror       = { workspace = true }
