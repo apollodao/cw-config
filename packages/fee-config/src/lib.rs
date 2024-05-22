@@ -3,6 +3,10 @@ use cosmwasm_std::{Addr, Coin, Coins, CosmosMsg, Decimal, Deps, Env, StdError, S
 use cw_address_like::AddressLike;
 use cw_asset::{Asset, AssetList};
 
+// Re-exports for convenience
+pub use cw_address_like;
+pub use cw_asset;
+
 #[cw_serde]
 #[derive(Default)]
 /// A struct that contains a fee configuration (fee rate and recipients).
@@ -17,6 +21,14 @@ pub struct FeeConfig<T: AddressLike> {
 }
 
 impl FeeConfig<String> {
+    /// Creates a new `FeeConfig<String>`
+    pub fn new(fee_rate: Decimal, fee_recipients: &[(String, Decimal)]) -> Self {
+        Self {
+            fee_rate,
+            fee_recipients: fee_recipients.to_vec(),
+        }
+    }
+
     /// Validates the fee config and returns a `FeeConfig<Addr>`.
     pub fn check(&self, deps: &Deps) -> StdResult<FeeConfig<Addr>> {
         // Fee rate must be between 0 and 100%
@@ -79,6 +91,22 @@ impl FeeConfig<Addr> {
             .into_iter()
             .flatten()
             .collect())
+    }
+
+    /// Creates messages to transfer a single `Coin` to the fee recipients.
+    pub fn transfer_coin_msgs(&self, coin: &Coin, env: &Env) -> StdResult<Vec<CosmosMsg>> {
+        let assets = AssetList::from(vec![coin.clone()].as_slice());
+        self.transfer_assets_msgs(&assets, env)
+    }
+
+    /// Creates messages to transfer a `Coins` to the fee recipients.
+    pub fn transfer_coins_msgs(&self, coins: &Coins, env: &Env) -> StdResult<Vec<CosmosMsg>> {
+        let assets: AssetList = coins
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<Asset>>()
+            .into();
+        self.transfer_assets_msgs(&assets, env)
     }
 
     /// Calculates the fee from the input assets and returns messages to send
@@ -191,6 +219,15 @@ impl FeeConfig<Addr> {
             msgs,
             cosmwasm_std::coin(coins_after_fee.amount_of(&coin.denom).u128(), coin.denom),
         ))
+    }
+
+    /// Returns the fee weight of the specified recipient address.
+    pub fn recipient_weight(&self, recipient: &Addr) -> Decimal {
+        self.fee_recipients
+            .iter()
+            .find(|(addr, _)| addr == recipient)
+            .map(|(_, weight)| *weight)
+            .unwrap_or_else(|| Decimal::zero())
     }
 }
 
@@ -524,5 +561,102 @@ pub mod tests {
             })
         );
         assert_eq!(coins_after_fee, vec![Asset::native("uusdc", 99u128)].into());
+    }
+
+    #[test]
+    fn transfer_coin_msgs_works() {
+        let env = mock_env();
+
+        let fee_config = super::FeeConfig {
+            fee_rate: Decimal::percent(1),
+            fee_recipients: vec![
+                (Addr::unchecked("addr1"), Decimal::percent(80)),
+                (Addr::unchecked("addr2"), Decimal::percent(20)),
+            ],
+        };
+        let input = coin(100u128, "uusdc");
+        let msgs = fee_config.transfer_coin_msgs(&input, &env).unwrap();
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(
+            msgs[0],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr1".to_string(),
+                amount: vec![coin(80u128, "uusdc".to_string())]
+            }),
+        );
+        assert_eq!(
+            msgs[1],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr2".to_string(),
+                amount: vec![coin(20u128, "uusdc".to_string())]
+            }),
+        );
+    }
+
+    #[test]
+    fn transfer_coins_msgs_works() {
+        let env = mock_env();
+
+        let fee_config = super::FeeConfig {
+            fee_rate: Decimal::percent(1),
+            fee_recipients: vec![
+                (Addr::unchecked("addr1"), Decimal::percent(80)),
+                (Addr::unchecked("addr2"), Decimal::percent(20)),
+            ],
+        };
+        let input = Coins::try_from(vec![coin(100u128, "uusdc"), coin(200u128, "uatom")]).unwrap();
+        let msgs = fee_config.transfer_coins_msgs(&input, &env).unwrap();
+        assert_eq!(msgs.len(), 4);
+        assert_eq!(
+            msgs[0],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr1".to_string(),
+                amount: vec![coin(160u128, "uatom".to_string())]
+            }),
+        );
+        assert_eq!(
+            msgs[1],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr1".to_string(),
+                amount: vec![coin(80u128, "uusdc".to_string())]
+            }),
+        );
+        assert_eq!(
+            msgs[2],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr2".to_string(),
+                amount: vec![coin(40u128, "uatom".to_string())]
+            }),
+        );
+        assert_eq!(
+            msgs[3],
+            CosmosMsg::Bank(BankMsg::Send {
+                to_address: "addr2".to_string(),
+                amount: vec![coin(20u128, "uusdc".to_string())]
+            }),
+        );
+    }
+
+    #[test]
+    fn recipient_weight_works() {
+        let fee_config = super::FeeConfig {
+            fee_rate: Decimal::percent(1),
+            fee_recipients: vec![
+                (Addr::unchecked("addr1"), Decimal::percent(80)),
+                (Addr::unchecked("addr2"), Decimal::percent(20)),
+            ],
+        };
+        assert_eq!(
+            fee_config.recipient_weight(&Addr::unchecked("addr1")),
+            Decimal::percent(80)
+        );
+        assert_eq!(
+            fee_config.recipient_weight(&Addr::unchecked("addr2")),
+            Decimal::percent(20)
+        );
+        assert_eq!(
+            fee_config.recipient_weight(&Addr::unchecked("addr3")),
+            Decimal::zero()
+        );
     }
 }
