@@ -1,4 +1,6 @@
-use cosmwasm_std::{Deps, DepsMut, Event, MessageInfo, Response, StdError, StdResult};
+use cosmwasm_std::{
+    Addr, Deps, DepsMut, Event, MessageInfo, Response, StdError, StdResult, Storage,
+};
 use cw_storage_plus::Item;
 use optional_struct::Applyable;
 use serde::{de::DeserializeOwned, Serialize};
@@ -9,15 +11,29 @@ pub trait Validateable<T> {
     fn validate(&self, deps: &Deps) -> StdResult<T>;
 }
 
-/// Updates the config of the contract
-pub fn update_config<T: Serialize + DeserializeOwned, U: From<T> + Validateable<T>>(
+/// Updates the config of the contract.
+///
+/// # Arguments
+///
+/// * `deps` - The dependencies for querying the chain.
+/// * `info` - The message info of the transaction.
+/// * `config_item` - The item to load and save the config.
+/// * `updates` - The updates to apply to the config.
+/// * `access_allowed` - A function that checks if the sender is allowed to update the config.
+///                If `None`, the sender is always allowed to update the config.
+///                The function takes the storage and the sender address and returns an error if the sender is not allowed.
+pub fn update_config<T: Serialize + DeserializeOwned, U: From<T> + Validateable<T>, E>(
     deps: DepsMut,
     info: &MessageInfo,
     config_item: Item<T>,
     updates: impl Applyable<U> + Debug,
+    access_allowed: Option<impl FnOnce(&dyn Storage, &Addr) -> Result<(), E>>,
 ) -> Result<Response, ConfigError> {
     // Validate that the sender is the owner
-    cw_ownable::assert_owner(deps.storage, &info.sender)?;
+    access_allowed
+        .map(|check| check(deps.storage, &info.sender))
+        .transpose()
+        .map_err(|_| ConfigError::Unauthorized {})?;
 
     let event = Event::new("sturdy/yield-split/update-config")
         .add_attribute("updates", format!("{:?}", updates));
@@ -43,4 +59,92 @@ pub enum ConfigError {
 
     #[error("Invalid config: {reason}")]
     InvalidConfig { reason: String },
+
+    #[error("Unauthorized")]
+    Unauthorized {},
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::BorrowMut;
+
+    use crate::{update_config, ConfigError, Validateable};
+    use cosmwasm_schema::schemars::JsonSchema;
+    use cosmwasm_std::{
+        testing::{mock_dependencies, mock_info},
+        Addr, StdError,
+    };
+    use cw_address_like::AddressLike;
+    use cw_storage_plus::Item;
+    use optional_struct::{optional_struct, Applyable};
+    use serde::{Deserialize, Serialize};
+
+    #[optional_struct(ConfigUpdates)]
+    #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
+    pub struct ConfigBase<T: AddressLike> {
+        pub example_addr: T,
+    }
+
+    pub type Config = ConfigBase<Addr>;
+    pub type ConfigUnchecked = ConfigBase<String>;
+
+    impl From<Config> for ConfigUnchecked {
+        fn from(config: Config) -> Self {
+            ConfigUnchecked {
+                example_addr: config.example_addr.to_string(),
+            }
+        }
+    }
+
+    impl Validateable<Config> for ConfigUnchecked {
+        fn validate(&self, deps: &cosmwasm_std::Deps) -> Result<Config, StdError> {
+            Ok(Config {
+                example_addr: deps.api.addr_validate(&self.example_addr)?,
+            })
+        }
+    }
+
+    const CONFIG: Item<Config> = Item::new("config");
+
+    #[test]
+    fn test_access_control() {
+        let mut deps = mock_dependencies();
+
+        // Instantiate owner
+        let owner = Addr::unchecked("owner");
+        cw_ownable::initialize_owner(deps.storage.borrow_mut(), &deps.api, Some(owner.as_str()))
+            .unwrap();
+
+        let config = Config {
+            example_addr: Addr::unchecked("example"),
+        };
+        CONFIG.save(deps.as_mut().storage, &config).unwrap();
+
+        let updates = ConfigUpdates {
+            example_addr: Some("example2".to_string()),
+        };
+
+        // Call from other sender, should fail
+        let info = mock_info("sender", &[]);
+        let err = update_config::<Config, ConfigUnchecked, _>(
+            deps.as_mut(),
+            &info,
+            CONFIG,
+            updates.clone(),
+            Some(cw_ownable::assert_owner),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ConfigError::Unauthorized {}));
+
+        // Call form owner, should succeed
+        let info = mock_info(owner.as_str(), &[]);
+        update_config::<Config, ConfigUnchecked, _>(
+            deps.as_mut(),
+            &info,
+            CONFIG,
+            updates,
+            Some(cw_ownable::assert_owner),
+        )
+        .unwrap();
+    }
 }

@@ -18,3 +18,6 @@ cw-storage-plus = { workspace = true }
 optional_struct = { workspace = true }
 cw-ownable      = { workspace = true }
 thiserror       = { workspace = true }
+
+[dev-dependencies]
+schemars        = { workspace = true }
