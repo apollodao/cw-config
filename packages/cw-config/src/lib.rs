@@ -14,7 +14,17 @@ pub trait Validateable<T> {
     fn validate(&self, deps: &Deps) -> StdResult<T>;
 }
 
-/// Updates the config of the contract.
+/// Updates the a config item with new values.
+///
+/// # Generics
+///
+/// * `T` - The type of the validated config.
+/// * `U` - The type of the unvalidated config.
+/// * `E` - The type of the error returned by the access check.
+///
+/// Requires that T implements `Serialize + DeserializeOwned`.
+/// Requires that U implements `From<T> + Validateable<T>`. I.e. that the unvalidated config can be
+/// validated into a validated config and that the unvalidated config can be created from a validated config.
 ///
 /// # Arguments
 ///
@@ -73,6 +83,7 @@ mod tests {
 
     use crate::{update_config, ConfigError, Validateable};
     use cosmwasm_schema::schemars::JsonSchema;
+    use cosmwasm_schema::serde::{Deserialize, Serialize};
     use cosmwasm_std::{
         testing::{mock_dependencies, mock_info},
         Addr, StdError,
@@ -80,7 +91,6 @@ mod tests {
     use cw_address_like::AddressLike;
     use cw_storage_plus::Item;
     use optional_struct::{optional_struct, Applyable};
-    use serde::{Deserialize, Serialize};
 
     #[optional_struct(ConfigUpdates)]
     #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
