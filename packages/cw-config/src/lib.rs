@@ -2,10 +2,13 @@ use cosmwasm_std::{
     Addr, Deps, DepsMut, Event, MessageInfo, Response, StdError, StdResult, Storage,
 };
 use cw_storage_plus::Item;
-use optional_struct::Applyable;
+pub use optional_struct::Applyable;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
+
+// Re-exports for convenience
+pub use optional_struct;
 
 pub trait Validateable<T> {
     fn validate(&self, deps: &Deps) -> StdResult<T>;
