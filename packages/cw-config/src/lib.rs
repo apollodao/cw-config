@@ -10,7 +10,9 @@ use thiserror::Error;
 // Re-exports for convenience
 pub use optional_struct;
 
+/// A trait for validating a config. The generic type `T` is the type of the validated config.
 pub trait Validateable<T> {
+    /// Validates the unvalidated config and returns the validated config or an error.
     fn validate(&self, deps: &Deps) -> StdResult<T>;
 }
 
