@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "cw-config"
-version = "0.1.0-rc.2"
+version = "0.1.0-rc.4"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",

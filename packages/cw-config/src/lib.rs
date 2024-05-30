@@ -48,7 +48,7 @@ pub fn update_config<T: Serialize + DeserializeOwned, U: From<T> + Validateable<
         .transpose()
         .map_err(|_| ConfigError::Unauthorized {})?;
 
-    let event = Event::new("sturdy/yield-split/update-config")
+    let event = Event::new("apollodao/cw-config/update-config")
         .add_attribute("updates", format!("{:?}", updates));
 
     // Load the old config, turn it into the unchecked version, apply the updates,
@@ -62,7 +62,7 @@ pub fn update_config<T: Serialize + DeserializeOwned, U: From<T> + Validateable<
     Ok(Response::new().add_event(event))
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ConfigError {
     #[error("{0}")]
     StdError(#[from] StdError),
